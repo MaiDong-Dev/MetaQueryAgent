@@ -1,0 +1,18 @@
+meta_db:
+  path: data/metadata.db
+
+llm:
+  model: deepseek-v4-flash
+  api_key: DEEPSEEK_API_KEY
+  base_url: https://api.deepseek.com
+
+milvus:
+  host: wl
+  port: 19530
+  dim: 1024
+  collection: column_domain
+
+embedding:
+  host: wl
+  port: 8081
+  model: BAAI/bge-large-zh-v1.5

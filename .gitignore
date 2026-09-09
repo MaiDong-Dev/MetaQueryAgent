@@ -1,0 +1,37 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ---- 虚拟环境 ----
+.venv/
+venv/
+env/
+
+# ---- IDE ----
+.idea/
+.vscode/
+
+# ---- CodeBuddy 项目数据 ----
+.codebuddy/
+
+# ---- 运行产物 / 数据库（含连接密码，不上传）----
+data/
+*.sqlite
+*.db
+*.sqlite3
+identifier.sqlite
+
+# ---- 垃圾文件 ----
+wl
+
+# ---- PyCharm 示例入口（项目入口在 agent/main.py）----
+/main.py
+
+# ---- 旧副本 ----
+docker/
+
+# ---- 部署文件夹：排除模型权重（1.3GB），保留 docker-compose 与 embedding 代码 ----
+MateBudlderAgent_dockercompose/bge-large-zh-v1.5/

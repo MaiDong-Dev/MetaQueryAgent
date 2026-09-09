@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meta Builder Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: #f5f7fa; color: #2c3e50; padding: 24px;
+    }
+    h1 { font-size: 22px; margin-bottom: 8px; color: #1f6feb; }
+    .sub { color: #888; font-size: 13px; margin-bottom: 24px; }
+    .card {
+      background: #fff; border-radius: 10px; padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 20px;
+    }
+    .card h2 { font-size: 16px; margin-bottom: 14px; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 12px; color: #666; }
+    input {
+      padding: 8px 10px; border: 1px solid #dcdfe6; border-radius: 6px;
+      font-size: 14px; width: 140px;
+    }
+    button {
+      padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer;
+      background: #1f6feb; color: #fff; font-size: 14px; transition: .2s;
+    }
+    button:hover { background: #1558c0; }
+    button:disabled { background: #a0c4ff; cursor: not-allowed; }
+    .db-list { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+    .db-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 12px; border: 1px solid #dcdfe6; border-radius: 6px; cursor: pointer;
+    }
+    .db-item.checked { background: #eaf2ff; border-color: #1f6feb; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee;
+             max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    th { background: #f7f9fc; color: #555; font-weight: 600; }
+    .msg { margin-top: 10px; font-size: 13px; }
+    .msg.ok { color: #2e7d32; }
+    .msg.err { color: #c62828; }
+    .muted { color: #999; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab {
+      padding: 8px 16px; border-radius: 6px; cursor: pointer;
+      background: #eef1f5; color: #555; font-size: 14px;
+    }
+    .tab.active { background: #1f6feb; color: #fff; }
+    /* 元数据库 md_* 表查看器 */
+    .md-layout { display: flex; gap: 16px; min-height: 400px; }
+    .md-sidebar {
+      width: 220px; flex-shrink: 0; background: #fafbfc;
+      border-radius: 8px; padding: 12px; border: 1px solid #eee;
+    }
+    .md-sidebar h3 { font-size: 13px; color: #666; margin-bottom: 10px; }
+    .md-item {
+      padding: 8px 10px; border-radius: 5px; cursor: pointer;
+      font-size: 13px; margin-bottom: 4px; word-break: break-all;
+    }
+    .md-item:hover { background: #eef1f5; }
+    .md-item.active { background: #1f6feb; color: #fff; }
+    .md-main { flex: 1; min-width: 0; }
+    .md-main h3 { font-size: 14px; margin-bottom: 6px; font-family: monospace; }
+    .md-info { color: #888; font-size: 12px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Meta Builder Agent</h1>
+  <div class="sub">连接数据库 → 选择库 → 生成元数据与向量 → 展示结果</div>
+
+  <!-- 1. 连接数据库 -->
+  <div class="card">
+    <h2>① 连接数据库</h2>
+    <div class="row">
+      <div class="field"><label>主机</label><input id="host" value="wl"></div>
+      <div class="field"><label>端口</label><input id="port" value="3307" type="number"></div>
+      <div class="field"><label>用户名</label><input id="user" value="root"></div>
+      <div class="field"><label>密码</label><input id="password" value="123456" type="password"></div>
+      <button id="btnConnect" onclick="connect()">连接</button>
+    </div>
+    <div id="connectMsg" class="msg"></div>
+  </div>
+
+  <!-- 2. 选择数据库 -->
+  <div class="card" id="selectCard" style="display:none">
+    <h2>② 选择业务库</h2>
+    <div class="db-list" id="dbList"></div>
+    <button id="btnBuild" onclick="build()">生成元数据 &amp; 向量</button>
+    <div id="buildMsg" class="msg"></div>
+  </div>
+
+  <!-- 3. 结果展示 -->
+  <div class="card" id="showCard" style="display:none">
+    <div class="tabs">
+      <div class="tab active" id="tabMeta" onclick="switchTab('meta')">元数据库（SQLite）</div>
+      <div class="tab" id="tabVec" onclick="switchTab('vec')">向量数据库（Milvus）</div>
+    </div>
+
+    <!-- 元数据库：md_* 表内容查看器 -->
+    <div id="panelMeta">
+      <div class="md-layout">
+        <div class="md-sidebar">
+          <h3>元数据表 md_*</h3>
+          <div id="mdTableList"></div>
+        </div>
+        <div class="md-main">
+          <h3 id="mdTableTitle">← 选择左侧一个表</h3>
+          <div class="md-info" id="mdTableInfo"></div>
+          <div id="mdTableContent" style="overflow-x:auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 向量数据库 -->
+    <div id="panelVec" style="display:none">
+      <div id="vecInfo"></div>
+      <div id="vecTable"></div>
+    </div>
+  </div>
+
+  <script>
+    let selectedDbs = new Set();
+
+    async function post(url, body) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      return res.json();
+    }
+    async function get(url) {
+      const res = await fetch(url);
+      return res.json();
+    }
+
+    // ① 连接
+    async function connect() {
+      const btn = document.getElementById('btnConnect');
+      btn.disabled = true;
+      const msg = document.getElementById('connectMsg');
+      msg.textContent = '连接中...';
+      const body = {
+        host: val('host'), port: parseInt(val('port')),
+        user: val('user'), password: val('password')
+      };
+      const data = await post('/databases', body);
+      if (data.error) {
+        msg.className = 'msg err'; msg.textContent = '连接失败: ' + data.error;
+      } else {
+        msg.className = 'msg ok'; msg.textContent = '连接成功，找到 ' + data.databases.length + ' 个库';
+        renderDbList(data.databases);
+        document.getElementById('selectCard').style.display = '';
+      }
+      btn.disabled = false;
+    }
+
+    function renderDbList(dbs) {
+      const box = document.getElementById('dbList');
+      box.innerHTML = '';
+      selectedDbs.clear();
+      dbs.forEach(db => {
+        const div = document.createElement('div');
+        div.className = 'db-item';
+        div.innerHTML = `<input type="checkbox" value="${db}"> ${db}`;
+        div.onclick = (e) => {
+          if (e.target.tagName !== 'INPUT') {
+            const cb = div.querySelector('input');
+            cb.checked = !cb.checked;
+          }
+          const cb = div.querySelector('input');
+          if (cb.checked) { selectedDbs.add(db); div.classList.add('checked'); }
+          else { selectedDbs.delete(db); div.classList.remove('checked'); }
+        };
+        box.appendChild(div);
+      });
+    }
+
+    // ② 构建
+    async function build() {
+      const btn = document.getElementById('btnBuild');
+      btn.disabled = true;
+      const msg = document.getElementById('buildMsg');
+      msg.className = 'msg'; msg.textContent = '构建中，可能需要一会儿（含 LLM 补全）...';
+      const body = {
+        host: val('host'), port: parseInt(val('port')),
+        user: val('user'), password: val('password'),
+        databases: Array.from(selectedDbs)
+      };
+      const data = await post('/collect', body);
+      if (data.error) {
+        msg.className = 'msg err'; msg.textContent = '构建失败: ' + data.error;
+      } else {
+        msg.className = 'msg ok';
+        msg.textContent = `构建完成：新增表 ${data.added_tables}、字段 ${data.added_columns + data.modified_columns}、AI 补全 ${data.enriched_tables} 表、向量写入 ${data.vectors_written} 条`;
+        document.getElementById('showCard').style.display = '';
+        await loadMdTables();
+        await loadVectors();
+      }
+      btn.disabled = false;
+    }
+
+    // ③ 展示
+    function switchTab(tab) {
+      document.getElementById('tabMeta').classList.toggle('active', tab === 'meta');
+      document.getElementById('tabVec').classList.toggle('active', tab === 'vec');
+      document.getElementById('panelMeta').style.display = tab === 'meta' ? '' : 'none';
+      document.getElementById('panelVec').style.display = tab === 'vec' ? '' : 'none';
+      if (tab === 'meta') loadMdTables();
+      if (tab === 'vec') loadVectors();
+    }
+
+    // 元数据库：左侧列出 md_* 表，右侧显示该表内容
+    async function loadMdTables() {
+      const data = await get('/metadata/md_tables');
+      const list = document.getElementById('mdTableList');
+      list.innerHTML = '';
+      data.tables.forEach(t => {
+        const div = document.createElement('div');
+        div.className = 'md-item';
+        div.textContent = t;
+        div.onclick = () => {
+          document.querySelectorAll('.md-item').forEach(x => x.classList.remove('active'));
+          div.classList.add('active');
+          loadMdTableContent(t);
+        };
+        list.appendChild(div);
+      });
+    }
+
+    async function loadMdTableContent(name) {
+      document.getElementById('mdTableTitle').textContent = name;
+      const data = await get(`/metadata/md_table/${name}?limit=200`);
+      if (data.error) {
+        document.getElementById('mdTableContent').innerHTML = `<div class="msg err">${data.error}</div>`;
+        return;
+      }
+      document.getElementById('mdTableInfo').textContent = `共 ${data.count} 条记录`;
+      if (data.count === 0) {
+        document.getElementById('mdTableContent').innerHTML = '<div class="muted">空表</div>';
+        return;
+      }
+      let html = '<table><thead><tr>';
+      data.columns.forEach(c => { html += `<th title="${c}">${c}</th>`; });
+      html += '</tr></thead><tbody>';
+      data.rows.forEach(r => {
+        html += '<tr>';
+        data.columns.forEach(c => {
+          let v = r[c];
+          if (v === null || v === undefined) v = '<span class="muted">-</span>';
+          else if (typeof v === 'object') v = JSON.stringify(v);
+          else if (typeof v === 'string' && v.length > 60) v = `<span title="${v.replace(/"/g, '&quot;')}">${v.substring(0, 60)}…</span>`;
+          html += `<td>${v}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('mdTableContent').innerHTML = html;
+    }
+
+    async function loadVectors() {
+      const data = await get('/vectors');
+      document.getElementById('vecInfo').innerHTML =
+        data.error
+          ? `<div class="msg err">向量库查询失败：${data.error}</div>`
+          : `<div class="msg ok">共 ${data.count} 条向量</div>`;
+      let html = '<table><thead><tr><th>字段语义</th><th>业务域</th></tr></thead><tbody>';
+      (data.items || []).forEach(v => {
+        html += `<tr><td>${v.column_text}</td><td>${v.business_domain || '<span class="muted">-</span>'}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      document.getElementById('vecTable').innerHTML = html;
+    }
+
+    function val(id) { return document.getElementById(id).value.trim(); }
+  </script>
+</body>
+</html>
